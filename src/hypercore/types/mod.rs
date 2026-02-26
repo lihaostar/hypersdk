@@ -604,7 +604,7 @@ pub struct Trade {
     pub tid: u64,
     /// Participant addresses: [buyer, seller]
     #[serde(default)]
-    pub users: [String; 2],
+    pub users: [Address; 2],
     /// Liquidation details, if applicable
     #[serde(skip_serializing_if = "Option::is_none")]
     pub liquidation: Option<Liquidation>,
@@ -635,32 +635,28 @@ impl Trade {
         matches!(self.side, Side::Ask)
     }
 
-    /// Returns the taker's wallet address, if available.
+    /// Returns the taker's wallet address.
     ///
     /// `users` is `[buyer, seller]`. The taker is the buyer on a `Bid`
-    /// and the seller on an `Ask`. Returns `None` when the address is
-    /// the empty-string default (i.e. the field was absent from JSON).
+    /// and the seller on an `Ask`.
     #[must_use]
-    pub fn taker_address(&self) -> Option<&str> {
-        let addr = match self.side {
-            Side::Bid => &self.users[0],
-            Side::Ask => &self.users[1],
-        };
-        if addr.is_empty() { None } else { Some(addr) }
+    pub fn taker_address(&self) -> Address {
+        match self.side {
+            Side::Bid => self.users[0],
+            Side::Ask => self.users[1],
+        }
     }
 
-    /// Returns the maker's wallet address, if available.
+    /// Returns the maker's wallet address.
     ///
     /// `users` is `[buyer, seller]`. The maker is the seller on a `Bid`
-    /// and the buyer on an `Ask`. Returns `None` when the address is
-    /// the empty-string default (i.e. the field was absent from JSON).
+    /// and the buyer on an `Ask`.
     #[must_use]
-    pub fn maker_address(&self) -> Option<&str> {
-        let addr = match self.side {
-            Side::Bid => &self.users[1],
-            Side::Ask => &self.users[0],
-        };
-        if addr.is_empty() { None } else { Some(addr) }
+    pub fn maker_address(&self) -> Address {
+        match self.side {
+            Side::Bid => self.users[1],
+            Side::Ask => self.users[0],
+        }
     }
 }
 
@@ -3725,11 +3721,13 @@ mod tests {
             "time": 1700000000000,
             "hash": "0xabc123",
             "tid": 42,
-            "users": ["0xbuyer111", "0xseller222"]
+            "users": ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"]
         }"#;
         let trade: Trade = serde_json::from_str(json).unwrap();
-        assert_eq!(trade.users[0], "0xbuyer111");
-        assert_eq!(trade.users[1], "0xseller222");
+        let buyer: Address = "0x1111111111111111111111111111111111111111".parse().unwrap();
+        let seller: Address = "0x2222222222222222222222222222222222222222".parse().unwrap();
+        assert_eq!(trade.users[0], buyer);
+        assert_eq!(trade.users[1], seller);
     }
 
     #[test]
@@ -3744,7 +3742,7 @@ mod tests {
             "tid": 42
         }"#;
         let trade: Trade = serde_json::from_str(json).unwrap();
-        assert_eq!(trade.users, ["", ""]);
+        assert_eq!(trade.users, [Address::ZERO, Address::ZERO]);
     }
 
     #[test]
@@ -3757,10 +3755,11 @@ mod tests {
             "time": 1700000000000,
             "hash": "0xabc123",
             "tid": 42,
-            "users": ["0xbuyer111", "0xseller222"]
+            "users": ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"]
         }"#;
         let trade: Trade = serde_json::from_str(json).unwrap();
-        assert_eq!(trade.taker_address(), Some("0xbuyer111"));
+        let buyer: Address = "0x1111111111111111111111111111111111111111".parse().unwrap();
+        assert_eq!(trade.taker_address(), buyer);
     }
 
     #[test]
@@ -3773,14 +3772,15 @@ mod tests {
             "time": 1700000000000,
             "hash": "0xabc123",
             "tid": 42,
-            "users": ["0xbuyer111", "0xseller222"]
+            "users": ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"]
         }"#;
         let trade: Trade = serde_json::from_str(json).unwrap();
-        assert_eq!(trade.taker_address(), Some("0xseller222"));
+        let seller: Address = "0x2222222222222222222222222222222222222222".parse().unwrap();
+        assert_eq!(trade.taker_address(), seller);
     }
 
     #[test]
-    fn taker_address_returns_none_when_users_absent() {
+    fn taker_address_returns_zero_when_users_absent() {
         let json = r#"{
             "coin": "BTC",
             "side": "B",
@@ -3791,7 +3791,7 @@ mod tests {
             "tid": 42
         }"#;
         let trade: Trade = serde_json::from_str(json).unwrap();
-        assert_eq!(trade.taker_address(), None);
+        assert_eq!(trade.taker_address(), Address::ZERO);
     }
 
     #[test]
@@ -3804,10 +3804,11 @@ mod tests {
             "time": 1700000000000,
             "hash": "0xabc123",
             "tid": 42,
-            "users": ["0xbuyer111", "0xseller222"]
+            "users": ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"]
         }"#;
         let trade: Trade = serde_json::from_str(json).unwrap();
-        assert_eq!(trade.maker_address(), Some("0xseller222"));
+        let seller: Address = "0x2222222222222222222222222222222222222222".parse().unwrap();
+        assert_eq!(trade.maker_address(), seller);
     }
 
     #[test]
@@ -3820,9 +3821,10 @@ mod tests {
             "time": 1700000000000,
             "hash": "0xabc123",
             "tid": 42,
-            "users": ["0xbuyer111", "0xseller222"]
+            "users": ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"]
         }"#;
         let trade: Trade = serde_json::from_str(json).unwrap();
-        assert_eq!(trade.maker_address(), Some("0xbuyer111"));
+        let buyer: Address = "0x1111111111111111111111111111111111111111".parse().unwrap();
+        assert_eq!(trade.maker_address(), buyer);
     }
 }
